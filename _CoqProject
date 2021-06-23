@@ -1,0 +1,4 @@
+-R . Group
+-arg -w
+-arg all
+./group_theory.v
