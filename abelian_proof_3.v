@@ -1,4 +1,4 @@
-From Defs Require Export group_theory.
+From Group Require Export group_theory.
 
 
 Section test_proof.
@@ -64,6 +64,22 @@ Proof.
   rewrite (e_mult b) in H1.
   rewrite mult_e in H1.
   exact H1.
+Qed.
+
+(* Proof using our custom tactics *)
+Theorem t2 : (forall (x : G), x <*> x = e) -> (forall (a b : G), a <*> b = b<*>a). 
+Proof.
+intro.
+intros.
+assert_and_simpl (a<*>b) (a<*>e<*>b).
+user_assert_equal (a<*>e<*>b) (a<*>((a<*>b)<*>(a<*>b))<*>b ).
+now rewrite <- (H (a<*>b)).
+assert_and_simpl (a <*> (a <*> b <*> (a <*> b)) <*> b) (a<*>a<*>(b<*>a)<*>(b<*>b)).
+user_assert_equal (a<*>a<*>(b<*>a)<*>(b<*>b)) (e<*>(b<*>a)<*>(b<*>b)).
+now rewrite (H a).
+user_assert_equal  (e<*>(b<*>a)<*>(b<*>b)) (e<*>(b<*>a)<*>e).
+now rewrite (H b).
+group.
 Qed.
 
 End test_proof.

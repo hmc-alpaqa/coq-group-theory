@@ -121,5 +121,19 @@ Qed.
 (* Definition of abelian group. *)
 Definition is_abelian (G : Group) : Prop := (forall (a b : G), a <*> b = b <*> a).
 
+Ltac group := 
+                   now repeat rewrite mult_assoc
+                 + now repeat rewrite <- mult_assoc
+                 + now rewrite mult_e  
+                 + now rewrite e_mult
+                 + now repeat (rewrite mult_e ; rewrite e_mult)
+                 + now rewrite <- mult_e 
+                 + now rewrite <- e_mult 
+                 + now rewrite mult_inv
+                 + now rewrite inv_mult
+                 + now rewrite mult_inv.
 
 
+Ltac user_assert_equal t t' := replace t with t' ;  swap 1 2 .
+
+Ltac assert_and_simpl t t' := user_assert_equal t t' ; try group. 
