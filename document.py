@@ -7,12 +7,15 @@ def sendCommand(proc, commandString) :
     proc.sendline(commandString)
     proc.expect("\(Answer \d+ Completed\)\x00")
     time.sleep(0.1)
-
+    
 def parseAndPrintGoals(str):
     goalsStr = str.partition("CoqString\"\\n ")[2].partition("\"))))")[0]
-    (hyp, _, goals ) = goalsStr.partition("\\n============================\\n")
-    print("Hypotheses:\n", hyp.replace("\\n", "\n") )
-    print("Goals: ", goals)
+    hypGoalsPairs = goalsStr.split("\\n\\n")
+    for n in range(len(hypGoalsPairs)):
+        (hyp, _, goals ) = hypGoalsPairs[n].partition("\\n============================\\n")
+        print("Hypotheses:\n", hyp.replace("\\n", "\n") )
+        print("Goals: ", goals)
+        print(n+1, "/", len(hypGoalsPairs))
     time.sleep(0.1)
 
 class Document:
