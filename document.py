@@ -34,6 +34,15 @@ class Document:
         self.proc.logfile_read = open("log.txt", "wb")
         self.proc.expect_exact(
            "\x00(Feedback((doc_id 0)(span_id 1)(route 0)(contents Processed)))\x00")
+        
+    def __repr__(self):
+        res = ""
+        for sid in self.contents.keys():
+            res += f"   Line {sid}:"
+            if self.contents[sid].executed == True:
+                res += " --  Exec'd --"
+            res += " " + self.contents[sid].statement + "\n"
+        return res
     
     def isConsistent(self):
         ''' checks that the coq document and member variables are consistent '''
@@ -124,6 +133,7 @@ class Document:
 def testing():
     doc = Document()
     print(doc.isConsistent(), "consistency")
+    print(doc)
 
     doc.addStatement("From Defs Require Export group_theory.") # starts here with sid 2
     doc.addStatement("Lemma boolean_implies_abelian : (forall x : group_theory.G, x<*>x = e) -> (is_abelian group_theory.G).")
@@ -139,15 +149,21 @@ def testing():
     print("Current total lines is: ", doc.totalLines)
     print("Current executed lines is:", doc.currentLine)
 
+    print(doc.isConsistent(), "consistency")
+    print(doc)
+
     doc.executeAndQueryGoals(9)
     print("Current total lines is: ", doc.totalLines)
     print("Current executed lines is:", doc.currentLine)
 
     print(doc.isConsistent(), "consistency")
+    print(doc)
 
     doc.removeStatement()
     doc.removeStatement()
+    
     print(doc.isConsistent(), "consistency")
+    print(doc)
 
 
 
