@@ -68,11 +68,12 @@ class Document:
         unexecSids = [sid for sid in self.liveLines.keys() if sid > self.currentLine]
 
         # every live line upto self.currentLine should be executed
-        # and every live line after self.currentLine should not be executed
         for sid in execSids:
             if self.liveLines[sid].executed != True:
                 print("Test 2 Failed")
                 return False
+        
+        # every live line after self.currentLine should not be executed
         for sid in unexecSids:
             if self.liveLines[sid].executed != False:
                 print("Test 3 Failed")
@@ -97,7 +98,7 @@ class Document:
         for sid in self.liveLines.keys():
             sendCommand(self.proc, f"(Query ((sid {sid}) (pp ((pp_format PpStr)))) Ast)")
             responseStr = open("log.txt").readlines()[-1]
-            coqStr = responseStr.partition("CoqString\"")[2].partition("\"))))")[0]
+            coqStr = responseStr.partition("CoqString")[2].partition("))))")[0]
             if (coqStr != self.liveLines[sid].statement):
                 print("Test 6 Failed")
                 return False
@@ -128,67 +129,52 @@ class Document:
         # change string to match what is stored by Coq
         sendCommand(self.proc, f"(Query ((sid {self.totalLines}) (pp ((pp_format PpStr)))) Ast)")
         coqStr = open("log.txt").readlines()[-1]
-        coqStr = coqStr.partition("CoqString\"")[2].partition("\"))))")[0]
+        coqStr = coqStr.partition("CoqString")[2].partition("))))")[0]
 
         self.liveLines[self.totalLines] = self.Line(coqStr)   
 
     def removeStatement(self):
-        ''' removes the last statement of the document, returns the line removed as a string '''
+        ''' 
+        removes the last statement of the live document 
+        returns sid of removed statement
+        '''
 
         removedSid = max(self.liveLines.keys())
         sendCommand(self.proc, f"(Cancel ({removedSid}))")
 
-        # transfer line to cancelled dictionary
+        # transfer line from live to cancelled dictionary
         self.cancelledLines[removedSid] = self.liveLines.pop(removedSid)
 
         if self.currentLine >= removedSid:
             self.currentLine = max(self.liveLines.keys())
+        
+        return removedSid
 
     def insertStatement(self, sid, coqStr):
         '''
         inserts the coqStr statement after the provided sid
-        if sid is too large, string is just added to the end of the doc
-        if sid is otherwise invalid, does nothing
+        if sid is invalid, does nothing
         '''
 
-        # TODO: fix to account for cancelled dictionary
-
-        print("\n\n\n Starting to insert:", coqStr)
-        print("Total Lines:", self.totalLines)
-        print("Insert After:", sid)
-
-        if sid >= self.totalLines:
+        if sid == max(self.liveLines.keys()):
             self.addStatement(coqStr)
             print("Added to end automatically")
             return
-        elif sid not in self.contents.keys():
+        elif sid not in self.liveLines.keys():
             print("invalid sid")
             return
         
-        print("Valid sid, continuing...")
-        
+        # Remove every line past desired sid, and save the removed sids
+        remSids = []
+        while max(self.liveLines.keys()) > sid:
+            remSids += [self.removeStatement()]
 
-        remStatements = []
-        for i in range(self.totalLines, sid, -1):
-            remStatements.append(self.removeStatement())
-        print("Removed Statements: ", remStatements)
-        print("Doc after removing later statements")
-        print(self)
-        print(self.isConsistent(), "consistency")
-        
-        
+        # Add in new coqStr
         self.addStatement(coqStr)
 
-        print("Doc with added statements")
-        print(self)
-
-        while remStatements:
-            self.addStatement(remStatements.pop())
-        
-        print("Completed doc")
-        print(self)
-
-        print("Finished! \n\n\n")
+        # Add back in the removed sids
+        for i in remSids:
+            self.addStatement(self.cancelledLines[i].statement)
         
 
 
@@ -209,36 +195,21 @@ def testing():
     doc.addStatement("Proof.")
     doc.addStatement("intros.")         # sid 5
 
-    doc.executeAndQueryGoals(5)
-    print(doc.isConsistent(), "consistency")
-    print(doc)
-
     doc.addStatement("assert (forall (a b : group_theory.G), Prop).")
     doc.addStatement("intros.")         # sid 7
     doc.addStatement("admit.")          # sid 8
 
     doc.executeAndQueryGoals(8)
-    print(doc.isConsistent(), "consistency")
-    print(doc)
+    print("\n\n Current State of Document: \n", doc)
+    print("Doc consistent:", doc.isConsistent())
 
-    doc.removeStatement()
+    doc.insertStatement(7, "assert ( (a <*> b) <*> (a <*> b) = e).") # sid 9
+    doc.insertStatement(9, "apply H.")                               # sid 11
 
-    doc.addStatement("assert ( (a <*> b) <*> (a <*> b) = e).")
-    doc.addStatement("apply H.")
-
-    doc.executeAndQueryGoals(10)
-    print(doc.isConsistent(), "consistency")
-    print(doc)
-
-    '''
-    sendCommand(doc.proc, "(Query ((sid 7) (pp ((pp_format PpStr)))) Ast)")
-    sendCommand(doc.proc, "(Query ((sid 8) (pp ((pp_format PpStr)))) Ast)")
-    sendCommand(doc.proc, "(Query ((sid 9) (pp ((pp_format PpStr)))) Ast)")
+    doc.executeAndQueryGoals(11)
+    print("\n\n Current State of Document: \n", doc)
+    print("Doc consistent:", doc.isConsistent())
     
-    doc.executeAndQueryGoals(7)
-    doc.executeAndQueryGoals(8)
-    doc.executeAndQueryGoals(9)
-    '''
 
 
 
