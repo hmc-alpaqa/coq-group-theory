@@ -3,10 +3,12 @@ import sys
 import os
 import time
 
+SLEEP_TIME = 0
+
 def sendCommand(proc, commandString) :
     proc.sendline(commandString)
     proc.expect("\(Answer \d+ Completed\)\x00")
-    time.sleep(0.1)
+    time.sleep(SLEEP_TIME)
 
 def parseAndPrintGoals(str):
     goalsStr = str.partition("CoqString\"")[2].partition("\"))))")[0]
@@ -16,7 +18,7 @@ def parseAndPrintGoals(str):
         print("Hypotheses:\n", hyp.replace("\\n", "\n") )
         print("Goals: ", goals)
         print(n+1, "/", len(hypGoalsPairs))
-    time.sleep(0.1)
+    time.sleep(SLEEP_TIME)
 
 class Document:
 
@@ -68,11 +70,12 @@ class Document:
         unexecSids = [sid for sid in self.liveLines.keys() if sid > self.currentLine]
 
         # every live line upto self.currentLine should be executed
-        # and every live line after self.currentLine should not be executed
         for sid in execSids:
             if self.liveLines[sid].executed != True:
                 print("Test 2 Failed")
                 return False
+        
+        # every live line after self.currentLine should not be executed
         for sid in unexecSids:
             if self.liveLines[sid].executed != False:
                 print("Test 3 Failed")
@@ -96,8 +99,13 @@ class Document:
         # compare strings of each live line
         for sid in self.liveLines.keys():
             sendCommand(self.proc, f"(Query ((sid {sid}) (pp ((pp_format PpStr)))) Ast)")
-            responseStr = open("log").readlines()[-1]
-            coqStr = responseStr.partition("CoqString\"")[2].partition("\"))))")[0]
+            responseStr = open("log.txt").readlines()[-1]
+            coqStr = responseStr.partition("CoqString")[2].partition("))))")[0]
+            
+            # remove "" around string if present
+            if coqStr[0] == '"' and coqStr[-1] == '"':
+                coqStr = coqStr[1:-1]
+           
             if (coqStr != self.liveLines[sid].statement):
                 print("Test 6 Failed")
                 return False
@@ -127,68 +135,82 @@ class Document:
 
         # change string to match what is stored by Coq
         sendCommand(self.proc, f"(Query ((sid {self.totalLines}) (pp ((pp_format PpStr)))) Ast)")
-        coqStr = open("log").readlines()[-1]
-        coqStr = coqStr.partition("CoqString\"")[2].partition("\"))))")[0]
+        coqStr = open("log.txt").readlines()[-1]
+        coqStr = coqStr.partition("CoqString")[2].partition("))))")[0]
+
+        # remove "" around string if present
+        if coqStr[0] == '"' and coqStr[-1] == '"':
+            coqStr = coqStr[1:-1]
 
         self.liveLines[self.totalLines] = self.Line(coqStr)   
 
     def removeStatement(self):
-        ''' removes the last statement of the document, returns the line removed as a string '''
+        ''' 
+        removes the last statement of the live document 
+        returns sid of removed statement
+        '''
 
         removedSid = max(self.liveLines.keys())
         sendCommand(self.proc, f"(Cancel ({removedSid}))")
 
-        # transfer line to cancelled dictionary
+        # transfer line from live to cancelled dictionary
         self.cancelledLines[removedSid] = self.liveLines.pop(removedSid)
 
         if self.currentLine >= removedSid:
             self.currentLine = max(self.liveLines.keys())
+        
+        return removedSid
 
     def insertStatement(self, sid, coqStr):
         '''
         inserts the coqStr statement after the provided sid
-        if sid is too large, string is just added to the end of the doc
-        if sid is otherwise invalid, does nothing
+        if sid is invalid, does nothing
         '''
 
-        # TODO: fix to account for cancelled dictionary
-
-        print("\n\n\n Starting to insert:", coqStr)
-        print("Total Lines:", self.totalLines)
-        print("Insert After:", sid)
-
-        if sid >= self.totalLines:
+        if sid == max(self.liveLines.keys()):
             self.addStatement(coqStr)
             print("Added to end automatically")
             return
-        elif sid not in self.contents.keys():
+        elif sid not in self.liveLines.keys():
             print("invalid sid")
             return
         
-        print("Valid sid, continuing...")
-        
+        # Remove every line past desired sid, and save the removed sids to front of list
+        remSids = []
+        while max(self.liveLines.keys()) > sid:
+            remSids = [self.removeStatement()] + remSids
 
-        remStatements = []
-        for i in range(self.totalLines, sid, -1):
-            remStatements.append(self.removeStatement())
-        print("Removed Statements: ", remStatements)
-        print("Doc after removing later statements")
-        print(self)
-        print(self.isConsistent(), "consistency")
-        
-        
+        # Add in new coqStr
         self.addStatement(coqStr)
 
-        print("Doc with added statements")
-        print(self)
+        # Add back in the removed sids
+        for i in remSids:
+            self.addStatement(self.cancelledLines[i].statement)
+    
+    def replaceStatement(self, sid, coqStr):
+        '''
+        replaces the statement and the sid with the new coqStr
+        if sid is invalid, does nothing
+        '''
 
-        while remStatements:
-            self.addStatement(remStatements.pop())
+        if sid not in self.liveLines.keys():
+            print("Tried to replace statement at invalid sid")
+            return
         
-        print("Completed doc")
-        print(self)
+        # Remove every line up past the desired sid and save the removed sids to front of list
+        remSids = []
+        while max(self.liveLines.keys()) > sid:
+            remSids = [self.removeStatement()] + remSids
+        
+        # Remove current sid, but do not save
+        self.removeStatement()
+        
+        # Add in new coqStr
+        self.addStatement(coqStr)
 
-        print("Finished! \n\n\n")
+        # add back in extra sids
+        for i in remSids:
+            self.addStatement(self.cancelledLines[i].statement)
         
 
 
@@ -201,7 +223,6 @@ class Document:
 
 def testing():
     doc = Document()
-    print(doc.isConsistent(), "consistency")
     print(doc)
 
     doc.addStatement("From Defs Require Export group_theory.") # starts here with sid 2
@@ -209,36 +230,51 @@ def testing():
     doc.addStatement("Proof.")
     doc.addStatement("intros.")         # sid 5
 
-    doc.executeAndQueryGoals(5)
-    print(doc.isConsistent(), "consistency")
-    print(doc)
-
     doc.addStatement("assert (forall (a b : group_theory.G), Prop).")
     doc.addStatement("intros.")         # sid 7
     doc.addStatement("admit.")          # sid 8
 
-    doc.executeAndQueryGoals(8)
-    print(doc.isConsistent(), "consistency")
-    print(doc)
+    doc.executeAndQueryGoals(5)
+    print("\n\n Current State of Document: \n", doc)
 
-    doc.removeStatement()
+    doc.insertStatement(7, "assert ( (a <*> b) <*> (a <*> b) = e).") # sid 9
+    doc.insertStatement(9, "apply H.")                               # sid 11
+    doc.insertStatement(11, "assert ( a <*> b = a <*> b ).")
+    doc.insertStatement(13, "reflexivity.")
+    doc.insertStatement(15, "rewrite <- (mult_e a) in H1 at 2.")
+    doc.insertStatement(17, "rewrite <- H0 in H1.") # sid 19
 
-    doc.addStatement("assert ( (a <*> b) <*> (a <*> b) = e).")
-    doc.addStatement("apply H.")
+    doc.insertStatement(19, "assert ( a <*> (a <*> b <*> (a <*> b)) <*> b = (a <*> a) <*> (b <*> a) <*> (b <*> b) ).")
+    doc.insertStatement(21, "repeat rewrite mult_assoc.")
+    doc.insertStatement(23, "auto.")
+    doc.insertStatement(25, "rewrite H2 in H1.") # sid 27
 
-    doc.executeAndQueryGoals(10)
-    print(doc.isConsistent(), "consistency")
-    print(doc)
-
-    '''
-    sendCommand(doc.proc, "(Query ((sid 7) (pp ((pp_format PpStr)))) Ast)")
-    sendCommand(doc.proc, "(Query ((sid 8) (pp ((pp_format PpStr)))) Ast)")
-    sendCommand(doc.proc, "(Query ((sid 9) (pp ((pp_format PpStr)))) Ast)")
+    doc.insertStatement(27, "assert (a <*> a = e).")
+    doc.insertStatement(29, "apply H.")
+    doc.insertStatement(31, "assert (b <*> b = e).")
+    doc.insertStatement(33, "apply H.")
     
-    doc.executeAndQueryGoals(7)
-    doc.executeAndQueryGoals(8)
-    doc.executeAndQueryGoals(9)
-    '''
+    doc.insertStatement(35, "rewrite H3 in H1.")
+    doc.insertStatement(37, "rewrite H4 in H1.")
+    doc.insertStatement(39, "rewrite mult_e in H1.")
+    doc.insertStatement(41, "rewrite e_mult in H1.")
+
+    doc.executeAndQueryGoals(43)
+    print("\n\n Current State of Document: \n", doc)
+
+    doc.replaceStatement(6, "assert (forall (a b : group_theory.G), a <*> b = b <*> a).")
+    doc.replaceStatement(65, "exact H1.")
+
+    doc.executeAndQueryGoals(66)
+    print("\n\n Current State of Document: \n", doc)
+
+    doc.addStatement("unfold is_abelian.")
+    doc.addStatement("exact H0.")
+
+    doc.executeAndQueryGoals(68)
+    print("\n\n Current State of Document: \n", doc)
+    print("Doc consistent:", doc.isConsistent())
+    
 
 
 
