@@ -9,7 +9,7 @@ def sendCommand(proc, commandString) :
     time.sleep(0.1)
 
 def parseAndPrintGoals(str):
-    goalsStr = str.partition("CoqString\"\\n ")[2].partition("\"))))")[0]
+    goalsStr = str.partition("CoqString\"")[2].partition("\"))))")[0]
     hypGoalsPairs = goalsStr.split("\\n\\n")
     for n in range(len(hypGoalsPairs)):
         (hyp, _, goals ) = hypGoalsPairs[n].partition("\\n============================\\n")
@@ -27,12 +27,12 @@ class Document:
         self.totalLines = 1
 
         try:
-            os.remove("log.txt")
+            os.remove("log")
         except:
             pass
         self.proc = pexpect.spawn("sertop -Q .,Defs --print0")
-        self.proc.logfile_send = sys.stdout.buffer
-        self.proc.logfile_read = open("log.txt", "wb")
+        #self.proc.logfile_send = sys.stdout.buffer
+        self.proc.logfile = open("log", "wb")
         self.proc.expect_exact(
            "\x00(Feedback((doc_id 0)(span_id 1)(route 0)(contents Processed)))\x00")
         
@@ -80,7 +80,7 @@ class Document:
         
             # unexecuted lines should not have any goals
             sendCommand(self.proc, f"(Query ((sid {sid}) (pp ((pp_format PpStr)))) Goals)")
-            if "ObjList()" not in open("log.txt").readlines()[-1]:
+            if "ObjList()" not in open("log").readlines()[-1]:
                 print("Test 4 Failed")
                 return False
         
@@ -89,14 +89,14 @@ class Document:
         for sid in (list(self.cancelledLines.keys()) + [self.totalLines + 1]):
             sendCommand(self.proc, f"(Query ((sid {sid}) (pp ((pp_format PpStr)))) Ast)")
             # TODO: there may be a better way to check for this
-            if "Uncaught exception" not in open("log.txt").readlines()[-1]:
+            if "Uncaught exception" not in open("log").readlines()[-1]:
                 print("Test 5 Failed")
                 return False
         
         # compare strings of each live line
         for sid in self.liveLines.keys():
             sendCommand(self.proc, f"(Query ((sid {sid}) (pp ((pp_format PpStr)))) Ast)")
-            responseStr = open("log.txt").readlines()[-1]
+            responseStr = open("log").readlines()[-1]
             coqStr = responseStr.partition("CoqString\"")[2].partition("\"))))")[0]
             if (coqStr != self.liveLines[sid].statement):
                 print("Test 6 Failed")
@@ -108,7 +108,7 @@ class Document:
         ''' executes up to the specified sid, and returns goals at that sid '''
         sendCommand(self.proc, f"(Exec {sid})")
         sendCommand(self.proc, f"(Query ((sid {sid}) (pp ((pp_format PpStr)))) Goals)")
-        parseAndPrintGoals(open("log.txt").readlines()[-1])
+        parseAndPrintGoals(open("log").readlines()[-1])
 
         for i in self.liveLines.keys():
             if i <= sid:
@@ -127,7 +127,7 @@ class Document:
 
         # change string to match what is stored by Coq
         sendCommand(self.proc, f"(Query ((sid {self.totalLines}) (pp ((pp_format PpStr)))) Ast)")
-        coqStr = open("log.txt").readlines()[-1]
+        coqStr = open("log").readlines()[-1]
         coqStr = coqStr.partition("CoqString\"")[2].partition("\"))))")[0]
 
         self.liveLines[self.totalLines] = self.Line(coqStr)   
@@ -242,8 +242,9 @@ def testing():
 
 
 
+# if  __name__ == "__main__":
+#     testing()
 
-testing()
 
     
     
