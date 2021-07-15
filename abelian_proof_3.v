@@ -67,10 +67,9 @@ Proof.
 Qed.
 
 (* Proof using our custom tactics *)
-Theorem t2 : (forall (x : G), x <*> x = e) -> (forall (a b : G), a <*> b = b<*>a). 
+Theorem t2 : (forall (x : group_theory.G), x <*> x = e) -> (forall (a b : group_theory.G), a <*> b = b<*>a). 
 Proof.
-intro.
-intros.
+intros .
 assert_and_simpl (a<*>b) (a<*>e<*>b).
 user_assert_equal (a<*>e<*>b) (a<*>((a<*>b)<*>(a<*>b))<*>b ).
 now rewrite <- (H (a<*>b)).

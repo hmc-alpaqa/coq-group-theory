@@ -137,3 +137,6 @@ Ltac group :=
 Ltac user_assert_equal t t' := replace t with t' ;  swap 1 2 .
 
 Ltac assert_and_simpl t t' := user_assert_equal t t' ; try group. 
+
+
+Ltac apply_result result_name := try now rewrite result_name ; try now rewrite <- result_name.

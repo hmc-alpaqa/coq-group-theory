@@ -10,6 +10,11 @@ def sendCommand(proc, commandString) :
     proc.expect("\(Answer \d+ Completed\)\x00")
     time.sleep(SLEEP_TIME)
 
+def goalCount(str):
+    goalsStr = str.partition("CoqString\"")[2].partition("\"))))")[0]
+    hypGoalsPairs = goalsStr.split("\\n\\n")
+    return len(hypGoalsPairs)
+
 def parseAndPrintGoals(str):
     goalsStr = str.partition("CoqString\"")[2].partition("\"))))")[0]
     hypGoalsPairs = goalsStr.split("\\n\\n")
@@ -99,7 +104,7 @@ class Document:
         # compare strings of each live line
         for sid in self.liveLines.keys():
             sendCommand(self.proc, f"(Query ((sid {sid}) (pp ((pp_format PpStr)))) Ast)")
-            responseStr = open("log.txt").readlines()[-1]
+            responseStr = open("log").readlines()[-1]
             coqStr = responseStr.partition("CoqString")[2].partition("))))")[0]
             
             # remove "" around string if present
@@ -135,7 +140,7 @@ class Document:
 
         # change string to match what is stored by Coq
         sendCommand(self.proc, f"(Query ((sid {self.totalLines}) (pp ((pp_format PpStr)))) Ast)")
-        coqStr = open("log.txt").readlines()[-1]
+        coqStr = open("log").readlines()[-1]
         coqStr = coqStr.partition("CoqString")[2].partition("))))")[0]
 
         # remove "" around string if present
@@ -274,13 +279,6 @@ def testing():
     doc.executeAndQueryGoals(68)
     print("\n\n Current State of Document: \n", doc)
     print("Doc consistent:", doc.isConsistent())
-    
 
-
-
-# if  __name__ == "__main__":
-#     testing()
-
-
-    
-    
+if  __name__ == "__main__":
+    testing()
