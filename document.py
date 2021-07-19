@@ -120,6 +120,15 @@ class Document:
     def executeAndQueryGoals(self, sid):
         ''' executes up to the specified sid, and returns goals at that sid '''
         sendCommand(self.proc, f"(Exec {sid})")
+        
+        # check for errors in executing statement
+        serapiReply = open("log").readlines()[-1]
+        if "CoqExn" in serapiReply:
+            print("The proof assistant couldn't parse this line: ", sid)
+            # print(serapiReply)
+            print(serapiReply.partition("str\"")[2].partition("\"")[0])
+            return 1
+
         sendCommand(self.proc, f"(Query ((sid {sid}) (pp ((pp_format PpStr)))) Goals)")
         parseAndPrintGoals(open("log").readlines()[-1])
 
@@ -138,12 +147,19 @@ class Document:
         commandString = "(Add () \"" + coqStr + "\")"
         sendCommand(self.proc, commandString)
 
-        # change string to match what is stored by Coq
+        # check for errors in adding statement
+        serapiReply = open("log").readlines()[-1]
+        if "CoqExn" in serapiReply:
+            print("The proof assistant couldn't parse this statement: ", coqStr)
+            # print(serapiReply)
+            print(serapiReply.partition("str\"")[2].partition("\"")[0])
+            self.totalLines -= 1                # TODO: Find more elegant way to account for this
+            return 1
+        
+        # change coqStr to match what is stored by Coq
         sendCommand(self.proc, f"(Query ((sid {self.totalLines}) (pp ((pp_format PpStr)))) Ast)")
         coqStr = open("log").readlines()[-1]
-        if "CoqExn" in coqStr:
-            print("The proof assistant couldn't parse this statement")
-            return 1
+
         coqStr = coqStr.partition("CoqString")[2].partition("))))")[0]
         # remove "" around string if present
         if coqStr[0] == '"' and coqStr[-1] == '"':
@@ -243,7 +259,8 @@ def testing():
 
     doc.executeAndQueryGoals(5)
     print("\n\n Current State of Document: \n", doc)
-
+    print("Doc consistent:", doc.isConsistent())
+    
     doc.insertStatement(7, "assert ( (a <*> b) <*> (a <*> b) = e).") # sid 9
     doc.insertStatement(9, "apply H.")                               # sid 11
     doc.insertStatement(11, "assert ( a <*> b = a <*> b ).")
@@ -282,5 +299,40 @@ def testing():
     print("\n\n Current State of Document: \n", doc)
     print("Doc consistent:", doc.isConsistent())
 
+def testing2():
+    doc = Document()
+    print(doc)
+
+    doc.addStatement("From Defs Require Export group_theory.") # starts here with sid 2
+    doc.addStatement("Lemma boolean_implies_abelian : (forall x : group_theory.G, x<*>x = e) -> (is_abelian group_theory.G).")
+    doc.addStatement("Proof.")
+    doc.addStatement("intros.")         # sid 5
+
+    doc.addStatement("assert (forall (a b : group_theory.G), Prop).")
+    doc.addStatement("intros.")         # sid 7
+    doc.addStatement("admit.")          # sid 8
+
+    doc.removeStatement()
+    doc.executeAndQueryGoals(7)
+    print("\n\n Current State of Document: \n", doc)
+    print("Doc consistent:", doc.isConsistent())
+
+    # syntax to add is incorrect
+    doc.addStatement("assert b = b.")
+
+    # trying to introduce new variable
+    doc.addStatement("assert (c = b).")
+    doc.executeAndQueryGoals(9)
+    print("\n\n Current State of Document: \n", doc)
+    print("Doc consistent:", doc.isConsistent())
+
+    # incorrect application of tactic
+    doc.removeStatement()
+    doc.addStatement("apply H.")
+    doc.executeAndQueryGoals(10)
+    print("\n\n Current State of Document: \n", doc)
+    print("Doc consistent:", doc.isConsistent())
+
+
 if  __name__ == "__main__":
-    testing()
+    testing2()
