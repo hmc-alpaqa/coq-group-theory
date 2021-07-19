@@ -141,8 +141,10 @@ class Document:
         # change string to match what is stored by Coq
         sendCommand(self.proc, f"(Query ((sid {self.totalLines}) (pp ((pp_format PpStr)))) Ast)")
         coqStr = open("log").readlines()[-1]
+        if "CoqExn" in coqStr:
+            print("The proof assistant couldn't parse this statement")
+            return 1
         coqStr = coqStr.partition("CoqString")[2].partition("))))")[0]
-
         # remove "" around string if present
         if coqStr[0] == '"' and coqStr[-1] == '"':
             coqStr = coqStr[1:-1]

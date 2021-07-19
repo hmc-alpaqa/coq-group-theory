@@ -15,8 +15,8 @@ class CLI(cmd.Cmd):
         Used in development of other more sophisticated commands
         
         '''
-        self.doc.addStatement(statement)
-        self.doc.executeAndQueryGoals(max(self.doc.liveLines.keys()))
+        if self.doc.addStatement(statement) != 1:
+            self.doc.executeAndQueryGoals(max(self.doc.liveLines.keys()))
 
     def do_prove(self, statement):
         ''' 
@@ -67,7 +67,7 @@ class CLI(cmd.Cmd):
             self.do_send("intro.")
         else:
             self.do_send(f"intros {hypname}.")
-            self.proof.append(f"Let {hypname} refer to our assumption.")
+        self.proof.append(f"Let {hypname} refer to our assumption.")
     
     def do_simplify(self, rest):
         self.do_send("group.")
