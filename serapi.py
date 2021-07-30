@@ -3,6 +3,11 @@ import sys
 import os
 import time
 
+# Python script originally used to make sure python and serapi can interact.
+#       Used to make sure we can make serapi calls using python.
+#       File is mostly oudated and probably no longer necessary.
+# For a more complete version/implementation, see document.py and cli.py.
+
 
 def sendCommand(proc, commandString) :
     proc.sendline(commandString)

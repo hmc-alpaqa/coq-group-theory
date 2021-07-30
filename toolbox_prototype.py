@@ -3,6 +3,11 @@ import sys
 import os
 import time
 
+# Python script to try and write functions that would be called in a toolbox prototype.
+#       Still very rudimentary.
+#       More of a proof of concept, and may need a complete re-work (especially if it
+#       is to be used in the browser version).
+
 
 def sendCommand(proc, commandString) :
     proc.sendline(commandString)
@@ -56,7 +61,7 @@ def instantiate(proc, hypString, oldVar, newVar):
 
 def reflexive(proc, elem):
     '''
-    proves that a gien elem is equal to itself
+    proves that a given elem is equal to itself
     '''
     coqStr = f"assert ( {elem} = {elem} ). reflexivity. "
     commandString = "(Add () \"" + coqStr + "\")"
