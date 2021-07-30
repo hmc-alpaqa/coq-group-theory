@@ -118,6 +118,34 @@ Proof.
   reflexivity.
 Qed.
 
+Theorem left_e_unique : (forall i : G, (forall a:G, i<*>a = a) -> i=e).
+Proof. 
+  intros.
+  rewrite <- (right_mult_cancel e).
+  rewrite (e_mult).
+  rewrite (H e).
+  easy.
+Qed.
+
+Theorem left_inv_unique : (forall (a b : G), b<*>a = e -> b=inv a).
+Proof.
+  intros.
+  rewrite <- (right_mult_cancel a).
+  rewrite H.
+  now rewrite inv_mult.
+Qed.
+
+Theorem double_inv : (forall a : G, inv (inv a ) = a).
+Proof.
+intros.
+rewrite <- (right_mult_cancel (inv a)).
+rewrite mult_inv.
+now rewrite inv_mult.
+Qed.
+
+
+
+
 (* Definition of abelian group. *)
 Definition is_abelian (G : Group) : Prop := (forall (a b : G), a <*> b = b <*> a).
 
@@ -139,4 +167,47 @@ Ltac user_assert_equal t t' := replace t with t' ;  swap 1 2 .
 Ltac assert_and_simpl t t' := user_assert_equal t t' ; try group. 
 
 
-Ltac apply_result result_name := try now rewrite result_name ; try now rewrite <- result_name.
+Ltac apply_result result_name :=   rewrite <- result_name ||  rewrite result_name; try easy.
+
+
+
+
+(* Proof using our custom tactics *)
+Theorem t2 : (forall (x : group_theory.G), x <*> x = e) -> (forall (a b : group_theory.G), a <*> b = b<*>a). 
+Proof.
+intros .
+assert_and_simpl (a<*>b) (a<*>e<*>b).
+user_assert_equal (a<*>e<*>b) (a<*>((a<*>b)<*>(a<*>b))<*>b ).
+apply_result (H (a<*>b)).
+assert_and_simpl (a <*> (a <*> b <*> (a <*> b)) <*> b) (a<*>a<*>(b<*>a)<*>(b<*>b)).
+user_assert_equal (a<*>a<*>(b<*>a)<*>(b<*>b)) (e<*>(b<*>a)<*>(b<*>b)).
+apply_result (H a).
+user_assert_equal  (e<*>(b<*>a)<*>(b<*>b)) (e<*>(b<*>a)<*>e).
+apply_result (H b).
+group.
+Qed.
+
+
+
+
+
+
+
+(* Hannah's proof *)
+Theorem t3 : (forall (x : group_theory.G), x <*> x = e) -> (forall (a b : group_theory.G), a <*> b = b<*>a). 
+Proof.
+intros.
+assert (forall x: group_theory.G, x = (inv x)).
+intro.
+apply_result (right_mult_cancel x).
+rewrite H.
+group.
+user_assert_equal (a<*>b) (inv (a<*>b)).
+apply_result (H0 (a<*>b)).
+user_assert_equal (inv (a<*>b)) (inv b <*> inv a).
+apply_result product_inv.
+apply_result H0.
+apply_result H0.
+Qed.
+
+

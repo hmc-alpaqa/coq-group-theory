@@ -242,8 +242,6 @@ class Document:
             self.statement = coqStr
             self.executed = False
 
-
-
 def testing():
     doc = Document()
     print(doc)
