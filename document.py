@@ -293,8 +293,6 @@ class Document:
             self.statement = coqStr
             self.executed = False
 
-
-
 def testing():
     """ Tests how the calls might be made for the toolbox prototype. """
     doc = Document()

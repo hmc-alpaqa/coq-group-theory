@@ -81,6 +81,26 @@ now rewrite (H b).
 group.
 Qed.
 
+(* Proof using our custom tactics *)
+Theorem t3 : (forall (x : group_theory.G), x <*> x = e) -> (forall (a b : group_theory.G), a <*> b = b<*>a). 
+Proof.
+intro.
+assert (forall x: group_theory.G, x = (inv x)).
+intro.
+apply_result (right_mult_cancel x).
+rewrite H.
+group.
+user_assert_equal (a<*>e<*>b) (a<*>((a<*>b)<*>(a<*>b))<*>b ).
+now rewrite <- (H (a<*>b)).
+assert_and_simpl (a <*> (a <*> b <*> (a <*> b)) <*> b) (a<*>a<*>(b<*>a)<*>(b<*>b)).
+user_assert_equal (a<*>a<*>(b<*>a)<*>(b<*>b)) (e<*>(b<*>a)<*>(b<*>b)).
+now rewrite (H a).
+user_assert_equal  (e<*>(b<*>a)<*>(b<*>b)) (e<*>(b<*>a)<*>e).
+now rewrite (H b).
+group.
+Qed.
+
+
 End test_proof.
 
   
