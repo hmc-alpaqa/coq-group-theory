@@ -6,16 +6,19 @@ import time
 SLEEP_TIME = 0
 
 def sendCommand(proc, commandString) :
+    """ Sends the specified commandString to coq, using the proc. """
     proc.sendline(commandString)
     proc.expect("\(Answer \d+ Completed\)\x00")
     time.sleep(SLEEP_TIME)
 
 def goalCount(str):
+    """ Counts how many goals are present after a (Query ... goals) command. """
     goalsStr = str.partition("CoqString\"")[2].partition("\"))))")[0]
     hypGoalsPairs = goalsStr.split("\\n\\n")
     return len(hypGoalsPairs)
 
 def parseAndPrintGoals(str):
+    """ Prints the goals and hypothesis nicely after a (Query ... goals) command. """
     goalsStr = str.partition("CoqString\"")[2].partition("\"))))")[0]
     hypGoalsPairs = goalsStr.split("\\n\\n")
     for n in range(len(hypGoalsPairs)):
@@ -26,8 +29,48 @@ def parseAndPrintGoals(str):
     time.sleep(SLEEP_TIME)
 
 class Document:
+    """
+    A class to represent a Coq document,
+        which utilizes Serapi to change a Coq document.
+    Outputs Serapi responses to a log.txt file.
+
+    ...
+    Attributes
+    ----------
+    liveLines : dict
+        lines in coq document that are currently "live"
+        keys are sid's and values are instances of the Document.Line class
+    cancelledLines : dict
+        lines in coq document that have been cancelled
+        keys are sid's, values are instances of Document.Line class
+    currentLine : int
+        the furthest line that has been executed
+    totalLines : int
+        the total number of lines (live + cancelled)
+    
+    Methods
+    -------
+    isConsistent : 
+        Tests the class to make sure attributes are consistent with coq doc.
+    executeAndQueryGoals :
+        Executes up to a line, queries and prints goals.
+    addStatement :
+        Adds new line to end of document.
+    removeStatement :
+        Removes the last live line, moving it to cancelledLines.
+    insertStatement :
+        Inserts a new line after the sid provided.
+    replaceStatement : 
+        Replaces the line at the sid provided.
+
+    Inner Classes
+    -------------
+    Line :
+        stores the information of the line (whether it's been executed, and it's string content)
+    """
 
     def __init__(self):
+        """  Creates a new blank coq document. """
         self.liveLines = {}
         self.cancelledLines = {}
         self.currentLine = 1
@@ -37,13 +80,15 @@ class Document:
             os.remove("log")
         except:
             pass
+
         self.proc = pexpect.spawn("sertop -Q .,Defs --print0")
-        #self.proc.logfile_send = sys.stdout.buffer
+        # self.proc.logfile_send = sys.stdout.buffer
         self.proc.logfile = open("log", "wb")
         self.proc.expect_exact(
            "\x00(Feedback((doc_id 0)(span_id 1)(route 0)(contents Processed)))\x00")
         
     def __repr__(self):
+        """ Prints out all the live lines followed by the cancelled lines. """
         res = "Live Doc: \n"
 
         for sid in self.liveLines.keys():
@@ -53,6 +98,7 @@ class Document:
             res += " " + self.liveLines[sid].statement + "\n"
         
         res += "Cancelled Lines: \n"
+
         for sid in self.cancelledLines.keys():
             res += f"   Line {sid}:"
             if self.cancelledLines[sid].executed == True:
@@ -62,34 +108,34 @@ class Document:
         return res
     
     def isConsistent(self):
-        ''' checks that the coq document and member variables are consistent '''
+        ''' Checks that the Coq document and member variables are consistent. '''
 
         # list of keys should be the same as the range of sid's
         listOfSids = list(self.liveLines.keys()) + list(self.cancelledLines.keys())
         listOfSids.sort()
         if listOfSids != list(range(2, self.totalLines + 1)):
-            print("Test 1 Failed")
+            print("Error: List of keys not the same as range of sid's")
             return False
         
         execSids = [sid for sid in self.liveLines.keys() if sid <= self.currentLine]
         unexecSids = [sid for sid in self.liveLines.keys() if sid > self.currentLine]
 
-        # every live line upto self.currentLine should be executed
+        # every live line up to self.currentLine should be executed
         for sid in execSids:
             if self.liveLines[sid].executed != True:
-                print("Test 2 Failed")
+                print("Error: Executed lines listed as unexecuted")
                 return False
         
         # every live line after self.currentLine should not be executed
         for sid in unexecSids:
             if self.liveLines[sid].executed != False:
-                print("Test 3 Failed")
+                print("Error: Unexecuted line is listed as executed")
                 return False
         
             # unexecuted lines should not have any goals
             sendCommand(self.proc, f"(Query ((sid {sid}) (pp ((pp_format PpStr)))) Goals)")
             if "ObjList()" not in open("log").readlines()[-1]:
-                print("Test 4 Failed")
+                print("Error: unexecuted line has a goal, when it shouldn't")
                 return False
         
         # cancelled lines and lines past self.totalLines should not exist
@@ -98,7 +144,7 @@ class Document:
             sendCommand(self.proc, f"(Query ((sid {sid}) (pp ((pp_format PpStr)))) Ast)")
             # TODO: there may be a better way to check for this
             if "Uncaught exception" not in open("log").readlines()[-1]:
-                print("Test 5 Failed")
+                print("Error: Cancelled lines (or line pas totalLines) exists when it shouldn't")
                 return False
         
         # compare strings of each live line
@@ -112,16 +158,16 @@ class Document:
                 coqStr = coqStr[1:-1]
            
             if (coqStr != self.liveLines[sid].statement):
-                print("Test 6 Failed")
+                print("Line string is inconsistent with coq string")
                 return False
 
         return True
   
     def executeAndQueryGoals(self, sid):
-        ''' executes up to the specified sid, and returns goals at that sid '''
+        ''' Executes up to the specified sid, and prints goals at that sid. '''
         sendCommand(self.proc, f"(Exec {sid})")
         
-        # check for errors in executing statement
+        # Check for errors in trying to execute statement
         serapiReply = open("log").readlines()[-1]
         if "CoqExn" in serapiReply:
             print("The proof assistant couldn't parse this line: ", sid)
@@ -132,6 +178,7 @@ class Document:
         sendCommand(self.proc, f"(Query ((sid {sid}) (pp ((pp_format PpStr)))) Goals)")
         parseAndPrintGoals(open("log").readlines()[-1])
 
+        # Updates executed lines
         for i in self.liveLines.keys():
             if i <= sid:
                 self.liveLines[i].executed = True
@@ -140,7 +187,7 @@ class Document:
             self.currentLine = sid
 
     def addStatement(self, coqStr):
-        ''' adds the corresponding coqStr to the document, only one line at a time '''
+        ''' Adds the corresponding coqStr to the document. Only works one line at a time. '''
 
         self.totalLines += 1
 
@@ -159,22 +206,22 @@ class Document:
         # change coqStr to match what is stored by Coq
         sendCommand(self.proc, f"(Query ((sid {self.totalLines}) (pp ((pp_format PpStr)))) Ast)")
         coqStr = open("log").readlines()[-1]
-
         coqStr = coqStr.partition("CoqString")[2].partition("))))")[0]
-        # remove "" around string if present
-        if coqStr[0] == '"' and coqStr[-1] == '"':
+        if coqStr[0] == '"' and coqStr[-1] == '"':                      # remove "" around string if present
             coqStr = coqStr[1:-1]
 
         self.liveLines[self.totalLines] = self.Line(coqStr)   
 
     def removeStatement(self):
         ''' 
-        removes the last statement of the live document 
-        returns sid of removed statement
+        Removes the last statement of the live document.
+        Returns sid of removed statement.
         '''
 
         removedSid = max(self.liveLines.keys())
         sendCommand(self.proc, f"(Cancel ({removedSid}))")
+        
+        #TODO: Catch errors in case cancel is called incorrectly
 
         # transfer line from live to cancelled dictionary
         self.cancelledLines[removedSid] = self.liveLines.pop(removedSid)
@@ -186,63 +233,68 @@ class Document:
 
     def insertStatement(self, sid, coqStr):
         '''
-        inserts the coqStr statement after the provided sid
-        if sid is invalid, does nothing
+        Inserts the coqStr statement after the provided sid.
+        If sid is invalid, does nothing.
         '''
 
         if sid == max(self.liveLines.keys()):
             self.addStatement(coqStr)
-            print("Added to end automatically")
             return
         elif sid not in self.liveLines.keys():
             print("invalid sid")
-            return
+            return 1
         
-        # Remove every line past desired sid, and save the removed sids to front of list
+        # Remove every line past desired sid, and save the removed sids
         remSids = []
         while max(self.liveLines.keys()) > sid:
             remSids = [self.removeStatement()] + remSids
 
-        # Add in new coqStr
+        # Add in new coqStr and removedSids
         self.addStatement(coqStr)
-
-        # Add back in the removed sids
         for i in remSids:
             self.addStatement(self.cancelledLines[i].statement)
     
     def replaceStatement(self, sid, coqStr):
         '''
-        replaces the statement and the sid with the new coqStr
-        if sid is invalid, does nothing
+        Replaces the statement and the sid with the new coqStr.
+        If sid is invalid, does nothing.
         '''
 
         if sid not in self.liveLines.keys():
             print("Tried to replace statement at invalid sid")
             return
         
-        # Remove every line up past the desired sid and save the removed sids to front of list
+        # Remove every line past desired sid and save the removed sids
         remSids = []
         while max(self.liveLines.keys()) > sid:
             remSids = [self.removeStatement()] + remSids
         
-        # Remove current sid, but do not save
+        # Remove statement at sid, add in new and removed statements
         self.removeStatement()
-        
-        # Add in new coqStr
         self.addStatement(coqStr)
-
-        # add back in extra sids
         for i in remSids:
             self.addStatement(self.cancelledLines[i].statement)
-        
-
 
     class Line:
+        """
+        A class that stores information about a Line in a coq document.
+
+        ...
+        Attributes
+        ----------
+        statement : str
+            the text of the Line
+        executed : bool
+            whether the Line has been executed
+        """
+
         def __init__(self, coqStr):
+            """ Creates a new line with the provided coqStr. """
             self.statement = coqStr
             self.executed = False
 
 def testing():
+    """ Tests how the calls might be made for the toolbox prototype. """
     doc = Document()
     print(doc)
 
@@ -298,6 +350,7 @@ def testing():
     print("Doc consistent:", doc.isConsistent())
 
 def testing2():
+    """ For testing error catching. """
     doc = Document()
     print(doc)
 
@@ -331,6 +384,7 @@ def testing2():
     print("\n\n Current State of Document: \n", doc)
     print("Doc consistent:", doc.isConsistent())
 
+    # TODO: Try to find more possible errors?
 
 if  __name__ == "__main__":
     testing2()
